@@ -90,6 +90,7 @@ void loop()   /*----( LOOP: RUNS CONSTANTLY )----*/
     Serial.print("run_status = "); Serial.println(run_status);
     lcd.clear();
     display_status_lcd(0,0,"Run Status = ",run_status);
+    motor_speed = 2;
     set_m2_home();
     m2_home_status = LOW;//reset m1 home status flag for debug, this will be activated by sensor
     set_m1_home();
@@ -217,7 +218,7 @@ void auto_mode (int cycle) {
   for (int y = 0; y <cycle; y++) {
     Serial.print("Cycle no  = ");Serial.println(y+1);
     display_status_lcd(0,1,"Cycle No   =  ",y+1);
-    motor_speed = 1;
+    motor_speed = 2;
     run_step_m1(1,1);
     delay (1000);
     run_step_m1(0,1);
