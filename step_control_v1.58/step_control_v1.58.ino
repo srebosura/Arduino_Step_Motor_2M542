@@ -900,10 +900,10 @@ int auto_mode (int cycle) {
    delay (100);
     if (read_frame == 1) { //frame sensor active high
       set_push_delay(push_delay);
-      motor_speed_m1 = pusher_FW_spd;
+      motor_speed_m1 = pusher_FW_spd; //user save through service menu
       run_step_m1(0,pusher_steps);
       delay (1000);
-      motor_speed_m1 = pusher_BKD_spd;
+      motor_speed_m1 = pusher_BKD_spd; //user save through service menu
       run_step_m1(1,pusher_steps);
       delay (1000);
      }
