@@ -1,7 +1,9 @@
+
+
 // include the library code:
 #include <LiquidCrystal.h>
 /*-----( Declare Constants, Pin Numbers )-----*/
-
+void(* resetFunc) (void) = 0; //software reset vector
 // set pin numbers:
 LiquidCrystal lcd(42, 44, 52, 50, 48, 46);
 const int start_buttonPin = 2;     // the number of the start pushbutton pin
@@ -9,7 +11,7 @@ const int stop_buttonPin = 3;     // the number of the stop pushbutton pin
 const int motor1_home_sensor = 18;     // the number of the motor1 home sensor pin
 const int motor2_home_sensor = 19;     // the number of the motor2 home sensor pin
 const int run_ledPin =  13;      // the number of the run/monitor LED pin
-
+const int reset_pin =  7;
 /*
 microstep driver 2M542
 Pul+ goes to +5V
@@ -42,12 +44,14 @@ int m2_home_status;     //motor2 home status as triggered by interrupt service
 int motor_speed;        //variable for setting motor speed, 1=1ms=1000hz
 int step_per_rev = 800; //step_per_rev is the driver's micro step settings
 
-void(* resetFunc) (void) = 0; //software reset vector
+//void(* resetFunc) (void) = 0; //software reset vector
 
 void setup()   /*----( SETUP: RUNS ONCE )----*/
 {
   // initialize the LED pin as an output:
+  digitalWrite(reset_pin, LOW);
   pinMode(run_ledPin, OUTPUT);
+  pinMode(reset_pin, OUTPUT);
   // initialize the pushbutton pin as an input:
   pinMode(start_buttonPin, INPUT);
   pinMode(stop_buttonPin, INPUT);
@@ -55,8 +59,8 @@ void setup()   /*----( SETUP: RUNS ONCE )----*/
   pinMode(motor2_home_sensor, INPUT);
   //set interrupt to activate anytime the stop button
   attachInterrupt(digitalPinToInterrupt(stop_buttonPin), read_sensors, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(motor1_home_sensor), read_m1_home_sensor , RISING);
-  attachInterrupt(digitalPinToInterrupt(motor2_home_sensor), read_m2_home_sensor , RISING);
+  //attachInterrupt(digitalPinToInterrupt(motor1_home_sensor), read_m1_home_sensor , RISING);
+  //attachInterrupt(digitalPinToInterrupt(motor2_home_sensor), read_m2_home_sensor , RISING);
   // set initial LED state
   digitalWrite(run_ledPin, run_ledState);
   // set stepper motor_1 output pins
@@ -86,32 +90,37 @@ void loop()   /*----( LOOP: RUNS CONSTANTLY )----*/
     lcd.print("  Standby Mode");
     run_status = read_switches();
     while (run_status == 1)  {
-    digitalWrite(run_ledPin, HIGH);  
-    Serial.print("run_status = "); Serial.println(run_status);
-    lcd.clear();
-    display_status_lcd(0,0,"Run Status = ",run_status);
-    motor_speed = 2;
-    set_m2_home();
-    m2_home_status = LOW;//reset m1 home status flag for debug, this will be activated by sensor
-    set_m1_home();
-    m1_home_status = LOW;//reset m1 home status flag for debug, this will be activated by sensor
-    delay(1000);
-    Serial.println("Seaquence start!");
-    auto_mode(3); //set the number of feeds
-    run_status = 0;
-    display_status_lcd(0,0,"Run Status = ",run_status);
-    Serial.println("Seaquence end!");
-    }
-  if (run_status == 0)  {
-   // turn start LED off and stepper motor1:
+      digitalWrite(run_ledPin, HIGH);  
+      Serial.print("run_status = "); Serial.println(run_status);
+      lcd.clear();
+      display_status_lcd(0,0,"Run Status = ",run_status);
+    
+      m2_home_status = digitalRead(motor2_home_sensor); //check home prox sensor m2
+      if (m2_home_status == 0) {
+      set_m2_home(); 
+      }
+      m1_home_status = digitalRead(motor1_home_sensor); //check home prox sensor m1
+      if (m1_home_status == 0) {
+      set_m1_home(); 
+      }
+      
+      delay(1000);
+      Serial.println("Seaquence start!");
+      auto_mode(5); //set the number of feeds
+      run_status = 0;
+      display_status_lcd(0,0,"Run Status = ",run_status);
+      Serial.println("Seaquence end!");
+      }
+    if (run_status == 0)  {
+        // turn start LED off and stepper motor1:
    
     digitalWrite(run_ledPin, LOW);
     Serial.print("run_status = ");
     Serial.println("Stop");
-    //resetFunc();
+        //resetFunc();
   }
-  
 }/* --(end main loop )-- */
+
 int read_switches() {
  // read the state of the switch into a local variable:
   int read_start = digitalRead(start_buttonPin);
@@ -135,8 +144,10 @@ void read_sensors() {
   delay (50);
   if (read_stop == HIGH) {
     Serial.println("Reset");
-    run_status = 0;  
-    resetFunc();
+    run_status = 0;
+    //lcd.clear(); 
+    //resetFunc();
+    digitalWrite(reset_pin, HIGH);
     }  
  }
 void read_m1_home_sensor() {
@@ -149,7 +160,7 @@ void read_m2_home_sensor() {
   m2_home_status = HIGH;
   delay(100);  
 }
-void run_step_m1(int dir1, int rev1) {    
+void run_step_m1(int dir1, float rev1) {    
   //dir1 set direction of m1
   //rev1 set the number of revolutions for m1
   //step_per_rev is the driver's micro step settings 
@@ -164,7 +175,7 @@ void run_step_m1(int dir1, int rev1) {
     }
 }
 
-void run_step_m2(int dir2, int rev2) {    
+void run_step_m2(int dir2, float rev2) {    
   //dir2 set direction of m2
   //rev2 set the number of revolutions for m2
   //step_per_rev is the driver's micro step settings 
@@ -185,6 +196,14 @@ void time_delay(int del) {
   }
 }
 
+void set_push_speed() {
+  int sensorReading = analogRead(A0);
+  // map it to a range from 0 to 100:
+  int push_speed = map(sensorReading, 0, 1023, 0, 100);
+  delay(push_speed);
+}
+
+
 void set_m1_home()  {
   delay (10);
   Serial.print("m1_home_status = "); 
@@ -195,7 +214,8 @@ void set_m1_home()  {
   motor_speed = 1;
   run_step_m1(0,1);
   Serial.print("m1_home_sensor = "); 
-  Serial.println(m1_home_status); 
+  Serial.println(m1_home_status);
+  m1_home_status = digitalRead(motor1_home_sensor); //check home prox sensor m1 
     }
   Serial.println("m1 in home position.....");   
 }  
@@ -206,10 +226,11 @@ void set_m2_home()  {
   while (m2_home_status == LOW) {
   Serial.println("Setting m2 to home position.....");
   display_lcd(0,1,"Set M2 to home ");
-  motor_speed = 2;
+  motor_speed = 1;
   run_step_m2(0,1);
   Serial.print("m2_home_sensor = "); 
-  Serial.println(m2_home_status); 
+  Serial.println(m2_home_status);
+  m2_home_status = digitalRead(motor2_home_sensor); //check home prox sensor m2 
     }
   Serial.println("m2 in home position.....");   
 }  
@@ -217,14 +238,14 @@ void auto_mode (int cycle) {
   Serial.print("Total Cycle = ");Serial.println(cycle);     
   for (int y = 0; y <cycle; y++) {
     Serial.print("Cycle no  = ");Serial.println(y+1);
-    display_status_lcd(0,1,"Cycle No   =  ",y+1);
-    motor_speed = 2;
+    display_status_lcd(0,1,"Cycle No   =  ",y+1);    
+    motor_speed = 1;
     run_step_m1(1,1);
     delay (1000);
     run_step_m1(0,1);
     delay (1000);
     run_step_m2(1,2);
-    delay (1000);
+    set_push_speed();
   }
 }      
 void display_lcd(int col, int row, String msg) {
